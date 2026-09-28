@@ -1,0 +1,13 @@
+# Build output
+bin/
+obj/
+
+# Local secrets (holds the Gemini API key)
+appsettings.Local.json
+
+# IDE / tooling
+.vs/
+.vscode/
+.idea/
+.claude/
+*.user

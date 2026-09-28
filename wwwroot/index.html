@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marvel Movies Chatbot</title>
+  <style>
+    :root {
+      --bg: #14171c;
+      --panel: #1c2027;
+      --bubble-bot: #262b33;
+      --bubble-user: #b8202e;
+      --text: #e9ecf1;
+      --muted: #9aa3b0;
+      --accent: #ed1d24;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    header {
+      padding: 16px 20px;
+      background: var(--panel);
+      border-bottom: 3px solid var(--accent);
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    header h1 { margin: 0; font-size: 18px; letter-spacing: 0.3px; }
+    header span { color: var(--muted); font-size: 13px; }
+
+    header button {
+      margin-left: auto;
+      background: none;
+      border: 1px solid #3a4150;
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    header button:hover { color: var(--text); border-color: var(--muted); }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg {
+      max-width: min(680px, 80%);
+      padding: 10px 14px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .user { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: 3px; }
+    .bot { align-self: flex-start; background: var(--bubble-bot); border-bottom-left-radius: 3px; }
+    .error { align-self: flex-start; background: #3a1f22; color: #ff9aa2; }
+    .pending { color: var(--muted); font-style: italic; }
+
+    form {
+      display: flex;
+      gap: 10px;
+      padding: 14px 20px 18px;
+      background: var(--panel);
+      border-top: 1px solid #2a303a;
+    }
+
+    input {
+      flex: 1;
+      padding: 11px 14px;
+      border-radius: 8px;
+      border: 1px solid #333a46;
+      background: #12151a;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    input:focus { outline: none; border-color: var(--accent); }
+
+    button[type="submit"] {
+      padding: 11px 22px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Marvel Movies Chatbot</h1>
+    <span>Grounded in marvel-movies.md</span>
+    <button type="button" id="clear">Clear chat</button>
+  </header>
+
+  <div id="messages"></div>
+
+  <form id="form">
+    <input id="input" type="text" autocomplete="off" placeholder="Ask about any Marvel movie…" autofocus />
+    <button type="submit" id="send">Send</button>
+  </form>
+
+  <script>
+    // Conversation History: the browser owns it and replays the whole array each turn,
+    // which keeps the server stateless.
+    const history = [];
+
+    const messagesEl = document.getElementById('messages');
+    const formEl = document.getElementById('form');
+    const inputEl = document.getElementById('input');
+    const sendEl = document.getElementById('send');
+
+    function addBubble(text, className) {
+      const el = document.createElement('div');
+      el.className = 'msg ' + className;
+      el.textContent = text;
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return el;
+    }
+
+    addBubble('Ask me anything about the Marvel Cinematic Universe — films, cast, directors, the Infinity Stones, box office.', 'bot');
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const question = inputEl.value.trim();
+      if (!question) return;
+
+      inputEl.value = '';
+      inputEl.disabled = true;
+      sendEl.disabled = true;
+
+      addBubble(question, 'user');
+      history.push({ role: 'user', text: question });
+
+      const pending = addBubble('Thinking…', 'bot pending');
+
+      try {
+        const response = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history })
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || payload.error || ('Request failed: ' + response.status));
+        }
+
+        pending.className = 'msg bot';
+        pending.textContent = payload.reply;
+        history.push({ role: 'model', text: payload.reply });
+      } catch (error) {
+        pending.className = 'msg error';
+        pending.textContent = error.message;
+        // Drop the unanswered question so a retry doesn't replay a dangling turn.
+        history.pop();
+      } finally {
+        inputEl.disabled = false;
+        sendEl.disabled = false;
+        inputEl.focus();
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    });
+
+    document.getElementById('clear').addEventListener('click', () => {
+      history.length = 0;
+      messagesEl.innerHTML = '';
+      addBubble('Chat cleared. Ask me anything about the Marvel Cinematic Universe.', 'bot');
+      inputEl.focus();
+    });
+  </script>
+</body>
+</html>
